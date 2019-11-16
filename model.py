@@ -11,101 +11,180 @@ from keras.layers.core import Dense, Activation, Flatten, Dropout, Lambda
 from keras.layers.convolutional import Conv2D
 from keras.layers.pooling import MaxPooling2D
 from keras.layers import Cropping2D, GlobalAveragePooling2D, Input
-from keras.applications.inception_v3 import preprocess_input
-from sklearn.model_selection import train_test_split
+from keras.optimizers import Adam
+import random
+
 
 import sklearn
 from math import ceil
 import matplotlib.pyplot as plt
 
-samples = []
-batch_size = 32
-with open('./data/driving_log.csv') as logs:
-    reader = csv.reader(logs)
-    next(reader)
-    for line in reader:
-        samples.append(line)
 
-samples = samples[1:100]
+if os.path.exists("./model.h5"):
+    os.remove("./model.h5")
+
+batch_size = 32
 
 def my_preprocess(path):
     img = cv2.imread(path)
     #img = img[50:130, :]
-    return preprocess_input(img)
+    return img
 
-def generator(samples, batch_size=32):
-    num_samples = len(samples)
-    while 1: # Loop forever so the generator never terminates
-        sklearn.utils.shuffle(samples)
-        for offset in range(0, num_samples, batch_size):
-            batch_samples = samples[offset:offset+batch_size]
-
-            images = []
-            angles = []
-            for batch_sample in batch_samples:
-                measurment = float(batch_sample[3])
-                center_image = my_preprocess(os.path.join('data', batch_sample[0]))
-                image_left = my_preprocess(os.path.join('data', batch_sample[1].strip()))
-                image_right = my_preprocess(os.path.join('data', batch_sample[2].strip()))
-                offset = 0.2
-                angles.extend([measurment, measurment - offset, measurment + offset])
-                images.extend([center_image, image_left, image_right])
-
-            # trim image to only see section with road
-            X_train = np.array(images)
-            y_train = np.array(angles)
-            yield sklearn.utils.shuffle(X_train, y_train)
+#def generator(samples, batch_size=32):
+#    num_samples = len(samples)
+#    while 1: # Loop forever so the generator never terminates
+#        sklearn.utils.shuffle(samples)
+#        for offset in range(0, num_samples, batch_size):
 
 
+def generate_batch(path, images, angles):
+    samples = []
 
-train_samples, validation_samples = train_test_split(samples, test_size=0.2)
+    with open(os.path.join(path,'driving_log.csv')) as logs:
+        reader = csv.reader(logs)
+        next(reader)
+        for line in reader:
+            samples.append(line)
 
-train_generator = generator(train_samples, batch_size=batch_size)
-validation_generator = generator(validation_samples, batch_size=batch_size)
+    #angles = []
+    #images = []
+    offset = 0.2
+
+    for sample in samples:
+        #batch_samples = samples[offset:offsetbatch_size]
+
+        measurment = float(sample[3])
+        center_image = my_preprocess(sample[0])
+        image_left = my_preprocess(sample[1])
+        image_right = my_preprocess(sample[2])
+        #if (center_image is not None):
+            #print(measurment)
+        angles.extend([measurment, measurment + offset, measurment - offset])
+        images.extend([center_image, image_left, image_right])
+        #X_train.append(center_image)
+        #y_train.append(measurment)
+    # trim image to only see section with road
+    #x = np.array(images)
+    #np.concatenate((X_data, x), axis = 0)
+    #np.concatenate((y_data, np.array(angles)),axis=0)
+    #return
+    #
+
+def generate_data():
+    sources = ['data/1_forward', 'data/1_backwards', 'data/1_forward_oscilation',  'data/2_forward_2', 'data/2_backwards_oscilation', 'data/2_backwards','data/1_backwards_oscilation']
+    samples = []
+
+    for source in sources:
+        with open(os.path.join(source, 'driving_log.csv')) as logs:
+            reader = csv.reader(logs)
+            next(reader)
+            for line in reader:
+                samples.append(line)
+
+        # angles = []
+        # images = []
+    offset = 0.25
+    angles = []
+    images = []
+    for sample in samples:
+        # batch_samples = samples[offset:offsetbatch_size]
+
+        measurment = float(sample[3])
+        center_image = my_preprocess(sample[0])
+
+        if (measurment != 0):
+            image_left = my_preprocess(sample[1])
+            image_right = my_preprocess(sample[2])
+            angles.extend([measurment + offset, measurment - offset, measurment - offset, measurment + offset, -measurment])
+            images.extend([image_left,np.flip(image_left), image_right,np.flip(image_right), np.flip(center_image)])
+        elif (random.randint(0,1) == 1):
+            images.append(center_image)
+            angles.append(measurment)
+
+
+    X_train = np.array(images)
+    y_train = np.array(angles)
+    return sklearn.utils.shuffle(X_train, y_train)
+
+def visualize_dataset(out):
+    max= out.max()
+    res = 100
+    representations = np.zeros(int(max*res) +1)
+    counter = 0
+    for i in out:
+        if (abs(i) ==0.2):
+            counter +=1
+        #print(i)
+        val = int(abs(i) * res)
+        representations[val] += 1
+    #print(counter)
+    plt.bar(np.arange(max*res +1), representations)
+    #plt.xticks(np.arange(bins), np.arange(max))
+    plt.show()
+
+batch_size = 32
+#
+# sources = ['data/1_forward', 'data/1_backwards', 'data/1_forward_oscilation']
+# samples = []
+# for source in sources:
+#     with open(os.path.join(source, 'driving_log.csv')) as logs:
+#         reader = csv.reader(logs)
+#         next(reader)
+#         for line in reader:
+#             samples.append(line)
+#
+# X_data, y_data = generate_batch_old(samples)
+X_data, y_data = generate_data()
+
+#visualize_dataset(y_data)
+#generate_batch('data/1_forward_oscilation', X_data, y_data)
+
+
+#X_val, y_val = generate_batch(validation_samples)
+
+#train_generator = generator(train_samples, batch_size=batch_size)
+#validation_generator = generator(validation_samples, batch_size=batch_size)
 
 input_shape=(160, 320, 3)
 
-input_shape_resized=(90, 320, 3)
+model = Sequential()
+#model.add(Lambda(lambda x: tf.image.rgb_to_grayscale(x)))
+model.add(Lambda(lambda x: (x / 255.0) - 0.5, input_shape=input_shape))
+model.add(Cropping2D(cropping=((50,20), (0,0))))
+model.add(Conv2D(3, 5, 3, activation='relu'))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Conv2D(24, 5, 3, activation='relu'))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Conv2D(36, 5, 3, activation='relu'))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Conv2D(48, 3, 1, activation='relu'))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+#model.add(Conv2D(64, 3, 1, activation='relu'))
+#model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Flatten())
+#model.add(Dense(1164, activation='relu'))
+model.add(Dense(200, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(50, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(10, activation='relu'))
+#model.add(Dropout(0.2))
+model.add(Dense(1))
 
-freeze_flag = False  # `True` to freeze layers, `False` for full training
-weights_flag = 'imagenet' # 'imagenet' or None
-preprocess_flag = True # Should be true for ImageNet pre-trained typically
+adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, amsgrad=False)
 
-inception = InceptionV3(weights=weights_flag, include_top=False,
-                        input_shape=input_shape_resized)
-
-
-if freeze_flag == True:
-    for layer in inception.layers:
-        layer.trainable = False
-
-input = Input(shape=input_shape)
-
-# Re-sizes the input with Kera's Lambda layer & attach to cifar_input
-resized_input = Cropping2D(cropping=((50,20), (0,0)), input_shape=(160,320,3))(input)
-#Lambda(lambda image: image[50:130, :])(resized_input)
-
-inp = inception(resized_input)
-
-
-x = GlobalAveragePooling2D()(inp)
-dense1 = Dense(512, activation = 'relu')(x)
-dense2 = Dense(82, activation = 'relu')(dense1)
-prediction = Dense(1, activation = 'relu')(dense2)
-
-model = Model(inputs=input, outputs=prediction)
-
-# Compile the model
-model.compile(optimizer='Adam', loss='mse', metrics=['accuracy'])
-
-# Check the summary of this new model to confirm the architecture
+model.compile(loss='mse', optimizer=adam)
 model.summary()
+from keras.callbacks import EarlyStopping
+early_stopping_monitor = EarlyStopping(patience=2)
 
-history_object = model.fit_generator(train_generator,
-           steps_per_epoch=ceil(len(train_samples)/batch_size),
-           validation_data=validation_generator,
-           validation_steps=ceil(len(validation_samples)/batch_size),
-           epochs=5, verbose=1)
+history_object = model.fit(X_data, y_data, validation_split=0.2, shuffle=True, epochs=10, callbacks=[early_stopping_monitor])
+
+
+#model.fit_generator(datagen.flow(X_train, y_train, batch_size=batch_size),
+#                    steps_per_epoch=len(X_train)/batch_size, epochs=2, verbose=1,
+#                    validation_data=val_datagen.flow(X_val, y_val, batch_size=batch_size),
+#                    validation_steps=len(X_val)/batch_size)
 
 
 ### print the keys contained in the history object
