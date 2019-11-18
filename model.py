@@ -15,8 +15,15 @@ import matplotlib.pyplot as plt
 
 import random
 
+
 def generate_data():
-    sources = ['data/2_backwards_oscilation', 'data/2_backwards', 'data/2_forward_tight', 'data/2_forward_2']
+    def read_image(path):
+        img = cv2.imread(path)
+        # images read with imread are BRG, images that will be read from simulator are RGB.
+        # Before training we have to convert BRG to RGB.
+        return img[:, :, [2, 1, 0]]
+
+    # sources = ['data/2_backwards_oscilation', 'data/2_backwards', 'data/2_forward_tight', 'data/2_forward_2']
     sources = ['data/1_forward', 'data/1_backwards', 'data/1_forward_oscilation', 'data/1_backwards_oscilation']
     samples = []
 
@@ -34,16 +41,17 @@ def generate_data():
     for sample in samples:
 
         measurement = float(sample[3])
-        center_image = cv2.imread(sample[0])
+        center_image = read_image(sample[0])
 
-        # If car is not driving straight, generate more data (add side cameras and flipped images)
+        # If the steering angle is different than 0, generate more data (add side cameras and flipped images)
         if measurement != 0:
-            image_left = cv2.imread(sample[1])
-            image_right = cv2.imread(sample[2])
+            image_left = read_image(sample[1])
+            image_right = read_image(sample[2])
             angles.extend(
                 [measurement + offset, measurement - offset, measurement - offset, measurement + offset, -measurement])
-            images.extend([image_left, np.flip(image_left), image_right, np.flip(image_right), np.flip(center_image)])
-        elif (random.randint(0,1) == 1):
+            images.extend(
+                [image_left, np.flip(image_left, 1), image_right, np.flip(image_right, 1), np.flip(center_image, 1)])
+        elif random.randint(0, 1) == 1:
             images.append(center_image)
             angles.append(measurement)
 
@@ -53,30 +61,32 @@ def generate_data():
 
 
 def visualize_dataset(out):
-    max = out.max()
-    res = 100
-    representations = np.zeros(int(max * res) + 1)
+    max_val = out.max()
+    res = 10
+    representations = np.zeros(int(max_val * res) + 1)
     counter = 0
     for i in out:
         if abs(i) == 0.2:
             counter += 1
         val = int(abs(i) * res)
         representations[val] += 1
-    plt.bar(np.arange(max * res + 1), representations)
+
+    plt.bar(np.arange(0, max_val, 1 / res), representations, width=1 / res / 2)
     plt.show()
 
-def build_model(learning_rate = 0.001, print_summary = True):
+
+def build_model(learning_rate=0.001, print_summary=True):
     model = Sequential()
-    model.add(Lambda(lambda x: (x / 255.0) - 0.5, input_shape=input_shape))
-    model.add(Cropping2D(cropping=((50, 20), (0, 0))))
+    model.add(Lambda(lambda x: (x / 255.0) - 0.5, input_shape=input_shape))  # normalizing
+    model.add(Cropping2D(cropping=((50, 20), (0, 0))))  # Cropping top and bottom
     model.add(Conv2D(3, (5, 3), activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Conv2D(24, (5, 3), activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Conv2D(36, (5, 3), activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2)))
-    #model.add(Conv2D(48, (3, 1), activation='relu'))
-    #model.add(MaxPooling2D(pool_size=(2, 2)))
+    # model.add(Conv2D(48, (3, 1), activation='relu'))
+    # model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Flatten())
     model.add(Dense(100, activation='relu'))
     model.add(Dropout(0.2))
@@ -103,12 +113,12 @@ batch_size = 32
 X_data, y_data = generate_data()
 input_shape = X_data[0].shape
 
-visualize_dataset(y_data)
+# visualize_dataset(y_data)
 
 model = build_model()
 early_stopping_monitor = EarlyStopping(patience=1)
 
-history_object = model.fit(X_data, y_data, validation_split=0.2, shuffle=True, epochs=20, batch_size = batch_size,
+history_object = model.fit(X_data, y_data, validation_split=0.2, shuffle=True, epochs=20, batch_size=batch_size,
                            callbacks=[early_stopping_monitor])
 
 ### print the keys contained in the history object

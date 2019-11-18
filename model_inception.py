@@ -33,7 +33,7 @@ with open('./data/driving_log.csv') as logs:
     for line in reader:
         samples.append(line)
 
-samples = samples[5000:6000]
+samples = samples[0:1000]
 
 def my_preprocess(path):
     img = cv2.imread(path)
@@ -115,7 +115,7 @@ prediction = Dense(1)(dense2)
 model = Model(inputs=input, outputs=prediction)
 
 # Compile the model
-model.compile(optimizer='Adam', loss='mse', metrics=['accuracy'])
+model.compile(optimizer='Adam', loss='mse')
 
 # Check the summary of this new model to confirm the architecture
 model.summary()
@@ -127,7 +127,7 @@ model.summary()
 #            epochs=5, verbose=1)
 
 history_object = model.fit_generator(datagen.flow(X_train, y_train, batch_size=batch_size),
-                    steps_per_epoch=len(X_train)/batch_size, epochs=2, verbose=1,
+                    steps_per_epoch=len(X_train)/batch_size, epochs=5, verbose=1,
                     validation_data=val_datagen.flow(X_val, y_val, batch_size=batch_size),
                     validation_steps=len(X_val)/batch_size)
 
